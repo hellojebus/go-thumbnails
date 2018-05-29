@@ -1,6 +1,14 @@
 package thumbnail
 
-import "image"
+import (
+	"image"
+	"io"
+	"image/jpeg"
+	"os"
+	"fmt"
+	"path/filepath"
+	"strings"
+)
 
 // get thumbnail size of src
 func Image(src image.Image) image.Image {
@@ -27,4 +35,45 @@ func Image(src image.Image) image.Image {
 		}
 	}
 	return dst
+}
+
+// ImageStream reads an image from r and
+// writes a thumbnail-size version of it to w.
+func ImageStream(w io.Writer, r io.Reader) error {
+	src, _, err := image.Decode(r)
+	if err != nil {
+		return err
+	}
+	dst := Image(src)
+	return jpeg.Encode(w, dst, nil)
+}
+
+// ImageFile2 reads an image from infile and writes
+// a thumbnail-size version of it to outfile.
+func ImageFile2(outfile, infile string) (err error) {
+	in, err := os.Open(infile)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(outfile)
+	if err != nil {
+		return err
+	}
+
+	if err := ImageStream(out, in); err != nil {
+		out.Close()
+		return fmt.Errorf("scaling %s to %s: %s", infile, outfile, err)
+	}
+	return out.Close()
+}
+
+// ImageFile reads an image from infile and writes
+// a thumbnail-size version of it in the same directory.
+// It returns the generated file name, e.g. "foo.thumb.jpeg".
+func ImageFile(infile string) (string, error) {
+	ext := filepath.Ext(infile) // e.g., ".jpg", ".JPEG"
+	outfile := strings.TrimSuffix(infile, ext) + ".thumb" + ext
+	return outfile, ImageFile2(outfile, infile)
 }
